@@ -1,39 +1,60 @@
-const express = require("express")
-const mysql = require("mysql2")
-const cors = require("cors")
+const express = require('express');
+const mysql = require('mysql2/promise');
+const cors = require('cors');
 
-const app = express()
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-app.use(cors())
-app.use(express.json())
+const pool = mysql.createPool({
+  host: 'localhost',      // seu host MySQL
+  user: 'root',           // seu usuário MySQL
+  password: 'sua_senha',  // sua senha MySQL
+  database: 'emails_db',  // seu banco de dados
+  waitForConnections: true,
+  connectionLimit: 10
+});
 
-const db = mysql.createConnection({
- host: process.env.MYSQLHOST,
- user: process.env.MYSQLUSER,
- password: process.env.MYSQLPASSWORD,
- database: process.env.MYSQLDATABASE
-})
-
-app.post("/salvar-email",(req,res)=>{
-
- const email = req.body.email
-
- const sql = "INSERT INTO emails (email) VALUES (?)"
-
- db.query(sql,[email],(err,result)=>{
-
-  if(err){
-   console.log(err)
-   res.status(500).send("erro")
-   return
+// GET - buscar todos os emails
+app.get('/api/emails', async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute('SELECT * FROM emails');
+    conn.release();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  res.send("email salvo")
+// POST - adicionar email
+app.post('/api/emails', async (req, res) => {
+  const { name, email, category, created_at } = req.body;
+  try {
+    const conn = await pool.getConnection();
+    await conn.execute(
+      'INSERT INTO emails (name, email, category, created_at) VALUES (?, ?, ?, ?)',
+      [name, email, category, created_at]
+    );
+    conn.release();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
- })
+// DELETE - excluir email
+app.delete('/api/emails/:id', async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    await conn.execute('DELETE FROM emails WHERE id = ?', [req.params.id]);
+    conn.release();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-})
-
-app.listen(process.env.PORT || 3000,()=>{
- console.log("API rodando")
-})
+app.listen(3000, () => {
+  console.log('Servidor rodando em http://localhost:3000');
+});
